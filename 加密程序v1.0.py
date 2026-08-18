@@ -593,9 +593,7 @@ def again_jiami():
         pushButton_3.setEnabled(False)
         pushButton_3.repaint()
         QApplication.processEvents()
-        t=time()
         result = jiami(fileside,lineEdit_2.text())
-        print(time()-t)
         if result == 1:
             showInfo("已成功加密")
             showInfo("已将加密文件放在与该程序同目录下")
