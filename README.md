@@ -1,8 +1,9 @@
 # This-is-a-post-quantum-asymmetric-encryption-program-based-on-Python.
-这个项目依赖于cryptography，pathvalidate，PyQt6，pqcrypto这4个外部库。我进行多重加密是为了极致安全，而且也提高保险。就算我那个算法实现不好或者被测信道等物理攻击了，也不至于全盘瘫痪。
-具体实现就是PyQt6负责图形化，然后我运用的算法是ML-KEM-1024和Classic McEliece-8192128做交换密钥，每一个算法个交换3密钥，记ML-KEM-1024交换的3次分别是key1,key2,key3。Classic McEliece-8192128交换的3次分别是k1,k2,k3。然后我的对称层是AES-256-GCM ，ChaCha20-Poly1305 和AES-256-CBC，按说的顺序做加密。就是先AES-256-GCM，在ChaCha20-Poly1305，最后AES-256-CBC加密。其中^代表异或。k1^key1作AES-256-GCM的key，k2^key2做ChaCha20-Poly1305的key，k3^key3作AES-256-CBC的key，k3^key3前12字节为AES-256-GCM的nonce，k3^key3的12到24字节（不包含第12字节，包含第24字节）作ChaCha20-Poly1305的nonce，key3的前16字节作为AES-256-CBC的iv。我这个程序考虑到加密大文件的需求，不会将文件一次性读取进入内存。我写的分块24mib一分块，每个分块都会用一个独立nonce，每加密一个块nonce就加1。我的cbc层会抛弃末尾的一些字节直接不加密透传，以保证每次加密都是加密16字节的倍数。不过不用担心，我抛弃的末尾字节是ChaCha20-Poly1305的tag字节，每块明文都进行了3重加密。而且我还把文件名进行加密，而且文件名的加密后的长度会填充到1100字节，文件名长度不会暴露。然后我每次加密文件会加密文件长度，然后加密文件后随机填充0到3mib的内容，以混淆文件长度。这个随机填充的数值可以在源码中更改。而且我还有数字签名，这样只要第一次公钥交换后未被篡改后就不会受到中间人攻击了，攻击者只能进行删除部分文件和调换文件顺序（这是文件级的操作，攻击者在理论上不能修改加密文件内容或者伪造加密文件）。对于签名，我使用ML-DSA-87 和 SLH-DSA-SHAKE-256f算法，先对文件元数据签名，包括文件名和那6个key，验证正确之后在进行解密，最后解密完成还有一个对明文整体和6个key的签名，解密程序会先校验签名，如果这时签名异常，直接删除以写入的文件，然后结束解密。其中pathvalidate库是解密端验证文件名是否合法用的，如果签名正确但文件名不合法也会终止解密。pqcrypto负责Classic McEliece-8192128和 SLH-DSA-SHAKE-256f算法。cryptography负责其他的加解密算法。因为openssl已经支持SLH-DSA，所以如果cryptography以后的版本支持了SLH-DSA，我会转用cryptography的SLH-DSA，并选用适合的SLH-DSA版本进行签名。然后关于私钥密码，我用的是Argon2id，salt选用32随机字节，memory_cost=256mib，iterations=3，lanes=4，length=32+32+12=76私钥加密的对称加密方案选的是cryptography库的Cobblestone256和ChaCha20-Poly1305双重加密，ChaCha20-Poly1305的iv就是length=32+32+12中的那12字节。我的描述可能和我的源码略有出入，以我的源码为准。如果我的描述与严重不符，可以告诉我让我修改文案。如果我的实现有安全漏洞，也请告诉我，我会尽量修改。但在这里强调一件事，我的程序不提供任何安全承诺，目前没有权威安全机构审查，不建议加密重要文件，如果被破解我会尽量修改，但不会对已经泄露的数据给予赔偿。
+这个项目依赖于cryptography，pathvalidate，PyQt6，pqcrypto这4个外部库。pqcrypto负责Classic McEliece-8192128和SLH-DSA-SHAKE-256f，cryptography负责其他加密算法，pathvalidate负责校验文件名是否合法，PyQt6负责图形化
 
 快速开始
+
+可以直接从释放中下载exe程序
 
 第一步：生成密钥
 
@@ -65,3 +66,68 @@ Alice——公钥：你的公钥，可公开分发
 无前向保密：私钥一旦泄露，历史密文均可解密。
 
 侧信道/实现：未经过独立安全审计，未对常数时间做承诺。不保证无实现或算法配置漏洞。
+
+算法与实现细节
+本程序为离线文件加密工具：本机完成加密，密文手动上传云端分发。以下描述对应源码 加密程序v1.0.py。
+
+1. 总体数据流
+TEXT
+明文文件
+  │  分块（24 MiB/块，流式，不整体读入内存）
+  ▼
+对称加密（AES-256-GCM → ChaCha20-Poly1305 → AES-256-CBC，逐块）
+  │
+  ▼
+密文文件 = 特征码 ‖ 6×KEM密文 ‖ 元数据双签名 ‖ 加密的(文件名‖长度) ‖ 随机填充 ‖ 数据区 ‖ 尾部随机填充 ‖ 最终双签名
+
+3. 密钥体系
+私钥文件（名字——私钥，明文 14344 字节，加密14464字节）：ML-DSA-87 私钥  ‖ SLH-DSA-SHAKE-256f 私钥 ‖  ML-KEM-1024 私钥 ‖ Classic McEliece-8192128 私钥
+公钥文件（名字——公钥，1366048 字节）：ML-DSA-87 ‖  SLH-DSA-SHAKE-256f ‖ ML-KEM-1024 ‖ Classic McEliece-8192128
+
+4. 密钥封装（混合 KEM）
+对同一对方公钥执行 6 次独立封装：ML-KEM-1024 封装 3 次得 key1,key2,key3，Classic McEliece-8192128 封装 3 次得 k1,k2,k3。两者基于完全独立的数学假设（格 vs 码），任一被结构性攻破，另一仍提供完整机密性。3 次重复的动机是：在不用显式 KDF 的前提下，为 3 个不同用途各提供一份独立密钥材料。
+
+对称密钥来源：
+算法                  密钥来源
+AES-256-GCM 密钥	   key1 ⊕ k1	         
+ChaCha20-Poly1305    密钥	key2 ⊕ k2	   
+GCM nonce 初值	     (key3⊕k3)[0:12]每块加1
+ChaCha nonce 初值	   (key3⊕k3)[12:24]每块加1
+AES-CBC 密钥	       (key3⊕k3)	32 B
+AES-CBC IV	         key3[0:16]	
+
+4. 对称加密层（逐块处理）
+每块明文 m（24 MiB，末块可短）的加密顺序：
+m ──AES-256-GCM(nonce1, AAD=块号)──▶ ct ‖ tag₁(16B)
+   ──ChaCha20-Poly1305(nonce2, AAD=块号)──▶ ct ‖ tag₂(16B)
+   ──AES-256-CBC(透传尾部部分 tag₂)──▶ 输出
+GCM 与 ChaCha 的 AAD 均为块序号：任何块的删除、重排、插入都会使后续块 nonce 或 AAD 失配，在块级即被 AEAD 检测——这是防重排/重放的完整性支柱；
+nonce 逐块递增，同一密钥下 nonce 不重用（这里不考虑超大文件的情况，要超过2^96次方个块一次加密才会出现问题，长度远大于1024tb）；
+CBC 层透传尾部 len%16 字节——这些字节落在 ChaCha 的 tag 上（tag 是公开认证值，不要求保密），透传不泄露明文，仅为保证 CBC 输入为 16 字节倍数；
+加密同时将明文喂入 hasher（计算哈希），用于最终签名。
+
+5. 分块与流式
+块大小 fenkuai = 24 MiB；
+ThreadPoolExecutor 流水线：读盘 / 加密 / 写盘三任务并行，加快速度；
+文件过小（<3 块）退化为串行路径。
+
+6. 完整性/认证体系
+块级 AEAD：每个 24 MiB 块双重认证（GCM + ChaCha），篡改在解密该块时立即失败；
+元数据双签名：对ML-DSA-87公钥 ‖ 6 个KEM 共享密钥 ‖ 文件名 ‖ 文件随机填充长度 ‖ 文件名长度 ‖ 文件名随机填充 的哈希做 ML-DSA-87 + SLH-DSA-SHAKE-256f 的哈希双签名，验证通过后才开始解密数据区——错误密钥/错误文件在早期即被拦截，不触发大规模写盘；
+最终双签名：数据区解密完成后，对 ML-DSA-87公钥 ‖ 6 个KEM 共享密钥 ‖ 文件长度 ‖ 文件名 ‖ 文件随机填充长度 ‖ 明文整体 的哈希再次双签名；异常则删除已写入的临时文件并终止，不留残留。
+ML-DSA-87签名的哈希是MLDSAMuHasher的，SLH-DSA-SHAKE-256f签名的哈希是hashlib.sha3_512的
+两个签名算法同样覆盖格（ML-DSA）与哈希（SLH-DSA）两类独立假设。
+
+8. 元数据保护（文件名与长度混淆）
+文件名：加密保存，密文长度填充至固定 1100 字节，文件名长度不泄露；
+文件长度：加密保存；解密时在密文尾部跳过 changdu 字节的随机填充（secrets.randbelow(3 MiB)，源码 suiji 可调），以混淆真实文件长度；
+解密端用 pathvalidate.is_valid_filename 校验解密出的文件名，非法即终止。
+
+9. 私钥保护（可选密码）
+KDF：Argon2id，memory_cost=256 MiB、iterations=3、lanes=4、 随机32字节 salt、输出 76 字节——内存硬特性是抵御 GPU/ASIC 暴力破解的主要手段；
+派生用途：key[0:32] Cobblestone256 密钥、key[32:64] ChaCha20 密钥、key[64:76] ChaCha nonce；
+双层加密：ChaCha20-Poly1305（AAD=salt）→ Cobblestone256（context=salt）顺序封装，密码错误在解密时抛 InvalidTag 并允许重新输入；
+私钥文件是否加密由生成时选择决定，加密与未加密通过文件大小区分。
+
+免责声明
+本程序未经过任何权威安全机构审查，不提供安全承诺；不建议加密重要文件。若发现漏洞，我会尽力修复，但对已泄露数据不承担赔偿责任。源码以仓库实际文件为准。
