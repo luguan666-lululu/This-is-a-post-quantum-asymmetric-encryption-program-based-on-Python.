@@ -85,16 +85,15 @@ TEXT
 公钥文件（名字——公钥，1366048 字节）：ML-DSA-87 ‖  SLH-DSA-SHAKE-256f ‖ ML-KEM-1024 ‖ Classic McEliece-8192128
 
 4. 密钥封装（混合 KEM）
-对同一对方公钥执行 6 次独立封装：ML-KEM-1024 封装 3 次得 key1,key2,key3，Classic McEliece-8192128 封装 3 次得 k1,k2,k3。两者基于完全独立的数学假设（格 vs 码），任一被结构性攻破，另一仍提供完整机密性。3 次重复的动机是：在不用显式 KDF 的前提下，为 3 个不同用途各提供一份独立密钥材料。
+对同一对方公钥执行 6 次独立封装：ML-KEM-1024 封装 3 次得 key1,key2,key3，Classic McEliece-8192128 封装 3 次得 k1,k2,k3。两者基于完全独立的数学假设，任一被结构性攻破，另一仍提供完整机密性。3 次重复的动机是：在不用显式 KDF 的前提下，为 3 个不同用途各提供一份独立密钥材料。
 
 对称密钥来源：
-算法                  密钥来源
-AES-256-GCM 密钥	   key1 ⊕ k1	         
-ChaCha20-Poly1305    密钥	key2 ⊕ k2	   
-GCM nonce 初值	     (key3⊕k3)[0:12]每块加1
-ChaCha nonce 初值	   (key3⊕k3)[12:24]每块加1
-AES-CBC 密钥	       (key3⊕k3)	32 B
-AES-CBC IV	         key3[0:16]	
+AES-256-GCM 密钥：	   key1 ⊕ k1	         
+ChaCha20-Poly1305密钥：key2 ⊕ k2	   
+GCM nonce 初值：	     (key3⊕k3)[0:12]每块加1
+ChaCha nonce 初值：	   (key3⊕k3)[12:24]每块加1
+AES-CBC 密钥：	       (key3⊕k3)	
+AES-CBC IV：	         key3[0:16]	
 
 4. 对称加密层（逐块处理）
 每块明文 m（24 MiB，末块可短）的加密顺序：
