@@ -143,7 +143,7 @@ def dusi_jia(f):
             if not ok:
                 raise passwordError
             try:
-                kdf = Argon2id(salt=s[:32],length=32+32+12,iterations=3,lanes=4,memory_cost=256 * 1024,ad=None,secret=None)
+                kdf = Argon2id(salt=s[:32],length=32+32+12,iterations=4,lanes=4,memory_cost=512 * 1024,ad=None,secret=None)
                 key = kdf.derive(password.encode())
                 m=wdjm_(key,s[32:],s[:32])
                 return m[:32],m[32:32+128]
@@ -405,7 +405,7 @@ def dusi_jie(f):
             if not ok:
                 raise passwordError
             try:
-                kdf = Argon2id(salt=s[:32],length=32+32+12,iterations=3,lanes=4,memory_cost=256 * 1024,ad=None,secret=None)
+                kdf = Argon2id(salt=s[:32],length=32+32+12,iterations=4,lanes=4,memory_cost=512 * 1024,ad=None,secret=None)
                 key = kdf.derive(password.encode())
                 m=wdjm_(key,s[32:],s[:32])
                 return m
@@ -545,9 +545,9 @@ def jiamisi(key:str,si):
     kdf = Argon2id(
     salt=salt,
     length=32+32+12,
-    iterations=3,
+    iterations=4,
     lanes=4,
-    memory_cost=256 * 1024,
+    memory_cost=512 * 1024,
     ad=None,
     secret=None,
     )
