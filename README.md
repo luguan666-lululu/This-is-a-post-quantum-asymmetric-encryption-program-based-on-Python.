@@ -124,7 +124,7 @@ ML-DSA-87签名的哈希是MLDSAMuHasher的，SLH-DSA-SHAKE-256f签名的哈希�
 解密端用 pathvalidate.is_valid_filename 校验解密出的文件名，非法即终止。
 
 9. 私钥保护（可选密码）
-KDF：Argon2id，memory_cost=256 MiB、iterations=3、lanes=4、 随机32字节 salt、输出 76 字节——内存硬特性是抵御 GPU/ASIC 暴力破解的主要手段；
+KDF：Argon2id，memory_cost=512 MiB、iterations=4、lanes=4、 随机32字节 salt、输出 76 字节——内存硬特性是抵御 GPU/ASIC 暴力破解的主要手段；
 派生用途：key[0:32] Cobblestone256 密钥、key[32:64] ChaCha20 密钥、key[64:76] ChaCha nonce；
 双层加密：ChaCha20-Poly1305（AAD=salt）→ Cobblestone256（context=salt）顺序封装，密码错误在解密时抛 InvalidTag 并允许重新输入；
 私钥文件是否加密由生成时选择决定，加密与未加密通过文件大小区分。
