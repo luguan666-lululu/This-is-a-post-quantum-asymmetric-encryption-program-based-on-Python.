@@ -635,6 +635,7 @@ def again_jiemi():
             return
         except passwordError:
                 showWarm("未输入密码，解密失败")
+                return
         except Exception as a:
             showWarm(f"解密失败：{a}")
             return
